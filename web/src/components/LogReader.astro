@@ -1,0 +1,111 @@
+---
+import { getCollection } from 'astro:content';
+
+const logs = (await getCollection('logs')).sort((a, b) => b.id.localeCompare(a.id));
+---
+
+<section class="reader" aria-label="Logs">
+	{
+		logs.map((log) => (
+			<pre class="log" id={`log-${log.id}`}>{log.body}</pre>
+		))
+	}
+
+	<div class="controls" hidden>
+		<button type="button" data-step="1">&larr; Older</button>
+		<span class="count" aria-live="polite"></span>
+		<button type="button" data-step="-1">Newer &rarr;</button>
+	</div>
+</section>
+
+<script>
+	// Without JS every log is shown in a stack; with it, one log at a time.
+	const reader = document.querySelector<HTMLElement>('.reader')!;
+	const logs = [...reader.querySelectorAll<HTMLElement>('.log')];
+	const controls = reader.querySelector<HTMLElement>('.controls')!;
+	const [older, newer] = controls.querySelectorAll('button');
+	const count = controls.querySelector('.count')!;
+
+	controls.hidden = false;
+
+	let current = 0;
+
+	function show(i: number) {
+		current = Math.max(0, Math.min(logs.length - 1, i));
+		logs.forEach((log, n) => (log.hidden = n !== current));
+		older.disabled = current === logs.length - 1;
+		newer.disabled = current === 0;
+		count.textContent = `${logs.length - current} / ${logs.length}`;
+	}
+
+	controls.addEventListener('click', (e) => {
+		const step = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-step]')?.dataset.step;
+		if (step) show(current + Number(step));
+	});
+
+	addEventListener('keydown', (e) => {
+		if (e.key === 'ArrowLeft') show(current + 1);
+		if (e.key === 'ArrowRight') show(current - 1);
+	});
+
+	show(0);
+</script>
+
+<style>
+	.log {
+		margin: 0;
+		font-family: inherit;
+		font-size: 1rem;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		overflow-wrap: break-word;
+	}
+
+	.log + .log:not([hidden]) {
+		margin-top: 2.5rem;
+	}
+
+	.controls {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: 1.75rem;
+	}
+
+	.controls[hidden] {
+		display: none;
+	}
+
+	button {
+		font: inherit;
+		font-size: 0.875rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		padding: 0.5rem 1rem;
+		background: var(--paper);
+		color: var(--ink);
+		border: 2px solid var(--ink);
+		box-shadow: 3px 3px 0 var(--ink);
+		cursor: pointer;
+	}
+
+	button:hover:not(:disabled) {
+		background: var(--ochre);
+	}
+
+	button:active:not(:disabled) {
+		transform: translate(3px, 3px);
+		box-shadow: none;
+	}
+
+	button:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+
+	.count {
+		font-size: 0.8125rem;
+		color: var(--ink-2);
+	}
+</style>
