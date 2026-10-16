@@ -221,5 +221,8 @@ __marimo__/
 data/raw/
 data/local/
 
+# Built each deploy by scripts/build_runs.py:
+data/runs.parquet
+
 # mac OS
 .DS_Store
