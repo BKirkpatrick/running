@@ -2,12 +2,14 @@
 
 - runs: one row per run (summary, Nike tags and derived totals)
 - trackpoints: one row per recorded sample, keyed by ``run_id``
+- runs_init: sanitised runs in the same columns and types as the website's
+  ``data/runs.parquet`` (built by scripts/build_runs.py), committed to the repo
 
-The outputs are unsanitised (they keep GPS, heart rate, Nike IDs and exact
-times), so they are written to the gitignored ``data/local/`` directory.
+runs and trackpoints are unsanitised (they keep GPS, heart rate, Nike IDs and
+exact times), so they are written to the gitignored ``data/local/`` directory.
 
 Usage:
-    uv run scripts/ingest_nike_tcx.py [--input DIR] [--output-dir DIR]
+    uv run scripts/ingest_nike_tcx.py [--input DIR] [--output-dir DIR] [--init-output PATH]
 """
 
 import argparse
@@ -21,6 +23,7 @@ import duckdb
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT = REPO_ROOT / "data" / "raw" / "nike" / "tcx"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "local"
+DEFAULT_INIT_OUTPUT = REPO_ROOT / "data" / "runs_init.parquet"
 
 # The export carries no timezone; all runs were recorded in the GB marketplace.
 LOCAL_TZ = ZoneInfo("Europe/London")
@@ -212,6 +215,24 @@ def parse_run(path: Path) -> tuple[dict, list[dict]]:
     return run, parse_trackpoints(path.stem, start, trackpoints)
 
 
+# Public schema shared with scripts/build_runs.py: no times, GPS, heart rate or
+# source IDs. Numbers are rounded; moving time is whole seconds.
+INIT_SELECT = """
+    SELECT
+        run_id::VARCHAR AS run_id,
+        run_date::DATE AS run_date,
+        name::VARCHAR AS name,
+        location::VARCHAR AS location,
+        round(distance_km, 2)::DOUBLE AS distance_km,
+        round(moving_time_s)::INTEGER AS moving_time_s,
+        round(avg_pace_min_per_km, 2)::DOUBLE AS avg_pace_min_per_km,
+        round(max_speed_m_s, 2)::DOUBLE AS max_speed_m_s,
+        'nike'::VARCHAR AS source
+    FROM runs
+    ORDER BY run_date, run_id
+"""
+
+
 def write_parquet(
     con: duckdb.DuckDBPyConnection,
     table: str,
@@ -234,6 +255,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--init-output", type=Path, default=DEFAULT_INIT_OUTPUT)
     args = parser.parse_args()
 
     files = sorted(args.input.glob("*.tcx"))
@@ -254,7 +276,9 @@ def main() -> None:
     con.execute("SET TimeZone = 'UTC'")
     write_parquet(con, "runs", RUN_COLUMNS, runs, "start_time_utc", runs_path)
     write_parquet(con, "trackpoints", TRACKPOINT_COLUMNS, trackpoints, "run_id, seq", trackpoints_path)
+    con.execute(f"COPY ({INIT_SELECT}) TO '{args.init_output}' (FORMAT parquet)")
     print(f"Wrote {len(runs)} runs to {runs_path}")
+    print(f"Wrote {len(runs)} sanitised runs to {args.init_output}")
     print(f"Wrote {len(trackpoints)} trackpoints to {trackpoints_path}")
 
 
