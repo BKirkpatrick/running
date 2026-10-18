@@ -1,92 +1,201 @@
 ---
-import LogReader from '../components/LogReader.astro';
-import Layout from '../layouts/Layout.astro';
+// The ridgeline of runs on the left; one log at a time on the right.
+import '../styles/site.css';
+import LogEntry from '../components/LogEntry.astro';
+import Ridgeline from '../components/Ridgeline.astro';
+import Tooltip from '../components/Tooltip.astro';
+import { fmtLong, km, loadRuns } from '../utils/runs';
+import { loadLogs } from '../utils/ridges';
+
+const runs = await loadRuns();
+const logs = await loadLogs(runs);
+const total = runs.reduce((a, r) => a + r.km, 0);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<Layout title="What I code about when I code about running">
-	<div class="sheet">
-		<header class="masthead">
-			<h1>What I code about when I code about running</h1>
-		</header>
+<!doctype html>
+<html lang="en-GB">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+		<link rel="icon" href={`${base}/favicon.ico`} />
+		<title>What I code about when I code about running</title>
+	</head>
+	<body>
+		<div class="layout">
+			<div class="cover">
+				<Ridgeline runs={runs} logs={logs} />
+				<div class="masthead">
+					<h1>What I code about when I code about running</h1>
+					<p>{km(total)} · {runs.length} outdoor runs · {fmtLong(runs[0].t)} – {fmtLong(runs.at(-1)!.t)}</p>
+				</div>
+			</div>
 
-		<main>
-			<LogReader />
-		</main>
+			<section class="reader" aria-label="Logs">
+				<div class="logs">
+					{logs.map((log) => <LogEntry log={log} />)}
+				</div>
+				<nav hidden>
+					<a href="#" data-dir="older">&larr; Older</a>
+					<span class="count" aria-live="polite"></span>
+					<a href="#" data-dir="newer">Newer &rarr;</a>
+				</nav>
+			</section>
+		</div>
 
-		<footer class="colophon">
-			<p>&mdash; end of transmission &mdash;</p>
-			<p class="prompt"><span>$</span> <span class="cursor" aria-hidden="true"></span></p>
-		</footer>
-	</div>
-</Layout>
+		<Tooltip />
+
+		<script>
+			// Without JS every log is listed down the right; with it, one at a time, chosen by the URL hash (default: newest).
+			const logs = [...document.querySelectorAll<HTMLElement>('.reader .log')];
+			const marks = document.querySelectorAll<SVGElement>('.ridges [data-week]');
+			const nav = document.querySelector<HTMLElement>('.reader nav')!;
+			const older = nav.querySelector<HTMLAnchorElement>('[data-dir="older"]')!;
+			const newer = nav.querySelector<HTMLAnchorElement>('[data-dir="newer"]')!;
+			const count = nav.querySelector('.count')!;
+			const scroller = document.querySelector<HTMLElement>('.logs')!;
+			nav.hidden = false;
+
+			function show() {
+				const i = Math.max(0, logs.findIndex((log) => `#${log.id}` === location.hash));
+				logs.forEach((log, n) => (log.hidden = n !== i));
+				marks.forEach((m) => m.classList.toggle('active', m.dataset.week === logs[i].dataset.week));
+				older.toggleAttribute('hidden', !logs[i + 1]);
+				newer.toggleAttribute('hidden', !logs[i - 1]);
+				if (logs[i + 1]) older.href = `#${logs[i + 1].id}`;
+				if (logs[i - 1]) newer.href = `#${logs[i - 1].id}`;
+				count.textContent = `${logs.length - i} / ${logs.length}`;
+				scroller.scrollTop = 0;
+			}
+
+			addEventListener('hashchange', show);
+			addEventListener('keydown', (e) => {
+				if (e.key === 'ArrowLeft' && !older.hidden) older.click();
+				if (e.key === 'ArrowRight' && !newer.hidden) newer.click();
+			});
+			show();
+		</script>
+	</body>
+</html>
 
 <style>
-	.sheet {
-		max-width: 50rem;
+	/* One screen: ridgeline on the left, logs on the right. */
+	.layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr);
+		gap: clamp(2rem, 5vw, 6rem);
+		align-content: center;
+		min-height: 100vh;
+		max-width: 90rem;
 		margin: 0 auto;
-		padding: clamp(1.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 3rem) 4rem;
+		padding: 4vh clamp(1.5rem, 4vw, 4rem);
+		box-sizing: border-box;
 	}
 
-	/* Masthead: centred title between a double and a single rule. */
+	.cover :global(.ridges) {
+		max-height: 80vh;
+	}
+
 	.masthead {
-		border-top: 4px double var(--rule);
-		border-bottom: 1px solid var(--rule);
-		padding: 1rem 0;
+		margin-top: 2rem;
 		text-align: center;
 	}
 
 	h1 {
-		margin: 0 auto;
-		max-width: 22ch;
-		font-family: var(--display);
-		font-size: clamp(1.75rem, 4.5vw, 2.75rem);
-		font-weight: 400;
-		line-height: 1.1;
-		letter-spacing: -0.01em;
-		text-wrap: balance;
-	}
-
-	main {
-		margin-top: 2.5rem;
-	}
-
-	.colophon {
-		margin-top: 3.5rem;
-		text-align: center;
+		margin: 0 0 0.5rem;
 		font-size: 0.8125rem;
+		font-weight: 400;
+		letter-spacing: 0.25em;
+		text-transform: uppercase;
+	}
+
+	.masthead p {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--quiet);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* The panel takes its height from the ridgelines, so the log controls stay put:
+	   `contain: size` stops the text from stretching the row. */
+	.reader {
+		contain: size;
+		display: flex;
+		flex-direction: column;
+		max-width: 32rem;
+	}
+
+	/* Long logs scroll inside the panel. */
+	.logs {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: 0.5rem;
+		scrollbar-width: thin;
+		scrollbar-color: #333 transparent;
+	}
+
+	.logs :global(.log[hidden]) {
+		display: none;
+	}
+
+	.logs :global(.log + .log:not([hidden])) {
+		margin-top: 4rem;
+	}
+
+	nav {
+		display: flex;
+		align-items: baseline;
+		gap: 1rem;
+		margin-top: 1.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid #1f1f1f;
+		font-size: 0.75rem;
 		letter-spacing: 0.15em;
 		text-transform: uppercase;
-		color: var(--ink-2);
 	}
 
-	.colophon p {
-		margin: 0;
+	nav[hidden] {
+		display: none;
 	}
 
-	.prompt {
-		margin-top: 0.75rem !important;
-		letter-spacing: 0;
+	nav a {
+		color: var(--quiet);
+		text-decoration: none;
+	}
+
+	nav a:hover {
 		color: var(--ink);
 	}
 
-	.cursor {
-		display: inline-block;
-		width: 0.6em;
-		height: 1.1em;
-		vertical-align: text-bottom;
-		background: var(--ink);
-		animation: blink 1.1s steps(1) infinite;
+	/* Keep the row's layout steady when there's no older/newer log. */
+	nav a[hidden] {
+		display: inline;
+		visibility: hidden;
 	}
 
-	@keyframes blink {
-		50% {
-			opacity: 0;
+	.count {
+		flex: 1;
+		text-align: center;
+		color: #4a4a4a;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Narrow screens: ridgeline on top, logs underneath. */
+	@media (max-width: 56rem) {
+		.layout {
+			grid-template-columns: 1fr;
+			min-height: 0;
 		}
-	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.cursor {
-			animation: none;
+		.reader {
+			contain: none;
+			max-width: none;
+		}
+
+		.logs {
+			overflow: visible;
 		}
 	}
 </style>

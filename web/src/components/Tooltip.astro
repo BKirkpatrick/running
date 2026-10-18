@@ -1,0 +1,51 @@
+---
+// One shared tooltip for every chart on the page: shows the data-tip text of whatever is under the pointer.
+---
+
+<script>
+	const tip = document.createElement('div');
+	tip.className = 'chart-tip';
+	tip.hidden = true;
+	document.body.append(tip);
+
+	addEventListener('pointermove', (e) => {
+		const target = (e.target as Element).closest?.('[data-tip]') as HTMLElement | SVGElement | null;
+		if (!target) {
+			tip.hidden = true;
+			return;
+		}
+		tip.replaceChildren(
+			...target.dataset.tip!.split('\n').map((line) => {
+				const row = document.createElement('div');
+				row.textContent = line;
+				return row;
+			}),
+		);
+		tip.hidden = false;
+		const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+		const y = e.clientY + 16 + tip.offsetHeight > innerHeight ? e.clientY - tip.offsetHeight - 12 : e.clientY + 16;
+		tip.style.transform = `translate(${x}px, ${y}px)`;
+	});
+</script>
+
+<style is:global>
+	.chart-tip {
+		position: fixed;
+		top: 0;
+		left: 0;
+		z-index: 10;
+		pointer-events: none;
+		padding: 0.4rem 0.6rem;
+		max-width: 22rem;
+		background: var(--tip-bg, #fff);
+		color: var(--tip-ink, #1a1a19);
+		border: 1px solid var(--tip-border, #e0e0dc);
+		border-radius: 4px;
+		box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+		font-size: 0.8125rem;
+	}
+
+	.chart-tip div:first-child {
+		font-weight: 600;
+	}
+</style>
