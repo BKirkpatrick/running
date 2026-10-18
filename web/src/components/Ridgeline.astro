@@ -1,0 +1,131 @@
+---
+// One line per week (Monday to Sunday), oldest at the top, each run a peak sized by distance.
+// Week numbers run down the left; weeks with a log are lit and link to it.
+// Add the class `active` to a week's [data-week] elements to light it and dim the rest.
+import { fmtDay, km, type Run } from '../utils/runs';
+import { RIDGE, ridges, type Log } from '../utils/ridges';
+
+interface Props {
+	runs: Run[];
+	logs: Log[];
+}
+
+const { runs, logs } = Astro.props;
+
+const { width, spacing, amp } = RIDGE;
+const rows = ridges(runs).map((r) => ({
+	...r,
+	logs: logs.filter((l) => l.week === r.t).sort((a, b) => a.t - b.t),
+}));
+const gutter = 28;
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+const baseY = (k: number) => amp + 10 + k * spacing;
+const y0 = Math.min(...rows.map((r, k) => baseY(k) + r.top)) - 4;
+const H = baseY(rows.length - 1) + 4 - y0;
+const tip = (r: (typeof rows)[number]) =>
+	[
+		`Week of ${fmtDay(r.t)}`,
+		`${km(r.km)} · ${r.runs.length} run${r.runs.length === 1 ? '' : 's'}`,
+		r.logs.length ? (r.logs.length === 1 ? 'Click to read the log' : `Click to read ${r.logs.length} logs`) : '',
+	]
+		.filter(Boolean)
+		.join('\n');
+---
+
+<svg
+	class="ridges"
+	viewBox={`${-gutter} ${y0} ${width + gutter + 4} ${H}`}
+	role="img"
+	aria-label="Ridgeline of weekly runs: one line per week, each run a peak sized by distance"
+>
+	{
+		rows.map((r, k) => {
+			const body = (
+				<>
+					<path class="fill" d={r.fill} />
+					<path class="line" d={r.line} />
+				</>
+			);
+			const attrs = { 'data-week': iso(r.t), 'data-tip': tip(r), transform: `translate(0 ${baseY(k)})` };
+			return r.logs.length ? (
+				<a class="week" href={`#log-${r.logs[0].id}`} {...attrs}>
+					{body}
+				</a>
+			) : (
+				<g class="week" {...attrs}>
+					{body}
+				</g>
+			);
+		})
+	}
+
+	{
+		rows.map((r, k) => (
+			<text class:list={['number', { lit: r.logs.length }]} data-week={iso(r.t)} x={-10} y={baseY(k)} text-anchor="end">
+				{k + 1}
+			</text>
+		))
+	}
+</svg>
+
+<style>
+	.ridges {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	/* Each ridge is filled with the background so it hides the lines above it. */
+	.fill {
+		fill: var(--ridge-bg);
+	}
+
+	.line {
+		fill: none;
+		stroke: var(--ridge-line);
+		stroke-width: 1.5;
+		stroke-linejoin: round;
+		transition: stroke 0.2s;
+	}
+
+	.week:hover .line,
+	.week:focus-visible .line,
+	.week.active .line {
+		stroke: var(--ridge-hover);
+		stroke-width: 2.25;
+	}
+
+	.week:focus-visible {
+		outline: none;
+	}
+
+	.ridges:has(.active) .week:not(.active) .line {
+		stroke: var(--ridge-dim);
+	}
+
+	.number {
+		font-size: 8px;
+		font-variant-numeric: tabular-nums;
+		dominant-baseline: middle;
+		fill: var(--ridge-dim);
+	}
+
+	.number.lit {
+		fill: var(--ridge-line);
+	}
+
+	.ridges:has(.active) .number.lit:not(.active) {
+		fill: var(--ridge-quiet);
+	}
+
+	.number.active {
+		fill: var(--ridge-hover);
+		font-weight: 700;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.line {
+			transition: none;
+		}
+	}
+</style>

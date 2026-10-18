@@ -12,7 +12,8 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^7.3.5"
+    "astro": "^7.3.5",
+    "hyparquet": "^1.31.4"
   },
   "allowScripts": {
     "esbuild": true

@@ -1,0 +1,54 @@
+---
+// One written log: date, the run's distance and pace, then the text.
+import { fmtLong, fmtPace, km } from '../utils/runs';
+import type { Log } from '../utils/ridges';
+
+interface Props {
+	log: Log;
+}
+
+const { log } = Astro.props;
+---
+
+<article class="log" id={`log-${log.id}`} data-week={new Date(log.week).toISOString().slice(0, 10)}>
+	<p class="meta">
+		<time datetime={log.id}>{fmtLong(log.t)}</time>
+		{log.km > 0 && <span>{km(log.km, 2)}</span>}
+		{log.pace && <span>{fmtPace(log.pace)} /km</span>}
+	</p>
+	<div class="text">
+		<log.Content />
+	</div>
+</article>
+
+<style>
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 1.25rem;
+		margin: 0 0 1.25rem;
+		font-size: 0.75rem;
+		letter-spacing: 0.15em;
+		text-transform: uppercase;
+		color: var(--quiet);
+		font-variant-numeric: tabular-nums;
+	}
+
+	time {
+		color: var(--ink);
+	}
+
+	.text {
+		color: var(--text);
+		line-height: 1.75;
+	}
+
+	.text :global(p) {
+		margin: 0 0 1.1em;
+	}
+
+	.text :global(code) {
+		font: inherit;
+		font-style: italic;
+	}
+</style>
