@@ -118,9 +118,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 	}
 
 	/* The panel takes its height from the ridgelines, so the log controls stay put:
-	   `contain: size` stops the text from stretching the row. */
+	   `contain: size` stops the text from stretching the row.
+	   The top margin drops the text a little below the top of the ridgelines; the controls stay level with the bottom. */
 	.reader {
 		contain: size;
+		margin-top: 2rem;
 		display: flex;
 		flex-direction: column;
 		max-width: 32rem;
@@ -140,7 +142,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		display: none;
 	}
 
-	.logs :global(.log + .log:not([hidden])) {
+	.logs :global(.log:not([hidden]) ~ .log:not([hidden])) {
 		margin-top: 4rem;
 	}
 
